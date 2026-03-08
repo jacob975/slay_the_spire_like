@@ -1,0 +1,33 @@
+warrior:
+  name: "Warrior"
+  description: "A strong and resilient fighter."
+  health: 100
+  health_cap: 100
+  ability: "Recover 6 health at the end of each turn."
+  inital_deck: 
+    - "Strike"
+    - "Strike"
+    - "Strike"
+    - "Strike"
+    - "Defend"
+    - "Defend"
+    - "Defend"
+    - "Defend"
+    - "Bash"
+
+ranger:
+  name: "Ranger"
+  description: "A precise hunter that controls the pace of battle."
+  health: 84
+  health_cap: 84
+  ability: "Gain 1 block at the start of each player turn."
+  inital_deck:
+    - "Pierce"
+    - "Pierce"
+    - "Quick Shot"
+    - "Quick Shot"
+    - "Brace"
+    - "Brace"
+    - "Expose"
+    - "Field Medicine"
+    - "Volley"

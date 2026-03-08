@@ -1,0 +1,64 @@
+Strike:
+  name: "Strike"
+  description: "Deal 6 damage."
+  type: "Attack"
+  cost: 1
+  damage: 6
+Defend:
+  name: "Defend"
+  description: "Gain 5 block."
+  type: "Skill"
+  cost: 1
+  block: 5
+Bash:
+  name: "Bash"
+  description: "Deal 8 damage and apply 2 Vulnerable."
+  type: "Attack"
+  cost: 2
+  damage: 8
+  vulnerable: 2
+
+Pierce:
+  name: "Pierce"
+  description: "Deal 7 damage."
+  type: "Attack"
+  cost: 1
+  damage: 7
+
+Quick Shot:
+  name: "Quick Shot"
+  description: "Deal 4 damage and gain 1 block."
+  type: "Attack"
+  cost: 1
+  damage: 4
+  block: 1
+
+Brace:
+  name: "Brace"
+  description: "Gain 7 block."
+  type: "Skill"
+  cost: 1
+  block: 7
+
+Expose:
+  name: "Expose"
+  description: "Apply 2 Vulnerable."
+  type: "Skill"
+  cost: 1
+  vulnerable: 2
+
+Field Medicine:
+  name: "Field Medicine"
+  description: "Gain 4 block and heal 3 health."
+  type: "Skill"
+  cost: 1
+  block: 4
+  heal: 3
+
+Volley:
+  name: "Volley"
+  description: "Deal 4 damage to all enemies."
+  type: "Attack"
+  cost: 2
+  damage: 4
+  target: "all_enemies"

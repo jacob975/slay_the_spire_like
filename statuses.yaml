@@ -1,0 +1,20 @@
+weak:
+  description: "減少角色的攻擊力"
+  ratio: 0.75
+  duration: 2
+  timing: "敵人的回合開始"
+vulnerable:
+  description: "增加角色受到的傷害"
+  ratio: 1.5
+  duration: 2
+  timing: "敵人的回合開始"
+poison:
+  description: "每回合結束時對角色造成傷害"
+  damage: 3
+  duration: 3
+  timing: "玩家的回合開始"
+regeneration:
+  description: "每回合結束時恢復角色的生命值"
+  heal: 2
+  duration: 3
+  timing: "玩家的回合開始"

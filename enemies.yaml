@@ -1,0 +1,52 @@
+Slime:
+  name: "Slime"
+  description: "A weak and gelatinous creature."
+  health: 30
+  ability: "Split into two smaller slimes when defeated."
+  action_pattern:
+    -
+      - {"type": "attack", "damage": 5}
+    -
+      - {"type": "defend", "block": 3}
+
+GoblinScout:
+  name: "Goblin Scout"
+  description: "A fast attacker that looks for weak openings."
+  health: 36
+  ability: "On turn start, if player has no block, gain 1 extra damage this turn."
+  action_pattern:
+    -
+      - {"type": "attack", "damage": 6}
+    -
+      - {"type": "defend", "block": 4}
+      - {"type": "attack", "damage": 4}
+    -
+      - {"type": "attack", "damage": 8}
+
+BoneGuard:
+  name: "Bone Guard"
+  description: "A durable skeleton that alternates defense and pressure."
+  health: 52
+  ability: "At enemy turn start, gain 1 block."
+  action_pattern:
+    -
+      - {"type": "defend", "block": 8}
+    -
+      - {"type": "attack", "damage": 7}
+    -
+      - {"type": "attack", "damage": 7}
+      - {"type": "defend", "block": 5}
+
+CultAdept:
+  name: "Cult Adept"
+  description: "A ritual caster that stacks pressure over time."
+  health: 44
+  ability: "Every third turn, increase the next attack damage by 2."
+  action_pattern:
+    -
+      - {"type": "defend", "block": 5}
+    -
+      - {"type": "attack", "damage": 9}
+    -
+      - {"type": "attack", "damage": 5}
+      - {"type": "defend", "block": 3}
