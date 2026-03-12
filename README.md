@@ -118,4 +118,4 @@ action_pattern = [
 敵人內容在`enemies.yaml`中定義。
 環境設定在`settings.yaml`中定義。
 狀態內容在`statuses.yaml`中定義。
-藥水內容在`potions.py`中定義。
+藥水內容在`potions.yaml`中定義。
