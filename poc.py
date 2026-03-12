@@ -76,6 +76,13 @@ class Game:
         self.characters = self._load_characters(root / "characters.yaml")
         self.enemies = self._load_enemies(root / "enemies.yaml")
         self.status_defs = self._load_statuses(root / "statuses.yaml")
+        # UI / battle state
+        self.battle_log: List[str] = []
+        self.battle_no: int = 0
+        self.battle_total: int = 0
+        self._current_turn_counter: int = 0
+        self._battle_player: Optional[Player] = None
+        self._battle_enemies: List[Enemy] = []
 
     @staticmethod
     def _load_yaml(path: Path) -> dict:
@@ -162,6 +169,105 @@ class Game:
 
     def _load_statuses(self, path: Path) -> Dict[str, dict]:
         return self._load_yaml(path)
+
+    def _clear_screen(self) -> None:
+        """Clear the terminal using ANSI escape codes."""
+        print("\033[2J\033[H", end="", flush=True)
+
+    def _hp_bar(self, current: int, maximum: int, width: int = 16) -> str:
+        if maximum <= 0:
+            return "░" * width
+        filled = max(0, min(width, int(round(current / maximum * width))))
+        return "█" * filled + "░" * (width - filled)
+
+    def _energy_pips(self, current: int, maximum: int = 3) -> str:
+        return "●" * current + "○" * max(0, maximum - current)
+
+    def _log(self, msg: str) -> None:
+        """Append a message to the battle log (keeps last 8 entries)."""
+        self.battle_log.append(msg)
+        if len(self.battle_log) > 8:
+            self.battle_log.pop(0)
+
+    def show_battle_ui(
+        self,
+        player: "Player",
+        enemies: List["Enemy"],
+        show_hand: bool = True,
+        prompt_message: str = "",
+    ) -> None:
+        """Clear the screen and render the complete battle UI."""
+        self._clear_screen()
+        W = 76
+        SEP = "═" * W
+        THIN = "─" * W
+
+        # Header
+        title = f" BATTLE {self.battle_no}/{self.battle_total} "
+        pad_l = (W - len(title)) // 2
+        pad_r = W - pad_l - len(title)
+        print("═" * pad_l + title + "═" * pad_r)
+
+        # Enemies
+        print(" ENEMIES")
+        print(THIN)
+        for idx, enemy in enumerate(enemies, start=1):
+            bar = self._hp_bar(enemy.hp, enemy.max_hp)
+            if enemy.is_dead():
+                print(f"  [{idx}] {enemy.name:<16} {bar} {enemy.hp:>3}/{enemy.max_hp:<3}  [DEAD]")
+            else:
+                print(f"  [{idx}] {enemy.name:<16} {bar} {enemy.hp:>3}/{enemy.max_hp:<3}  Blk:{enemy.block}")
+                if enemy.statuses:
+                    st = "  ".join(f"{k}({v})" for k, v in enemy.statuses.items())
+                    print(f"       Statuses: {st}")
+                if enemy.action_pattern:
+                    acts = enemy.action_pattern[
+                        self._current_turn_counter % len(enemy.action_pattern)
+                    ]
+                    parts: List[str] = []
+                    for a in acts:
+                        if a.type.lower() == "attack":
+                            parts.append(f"Attack {a.damage} dmg")
+                        elif a.type.lower() == "defend":
+                            parts.append(f"Defend +{a.block} blk")
+                        else:
+                            parts.append(a.type)
+                    print(f"       Intent:   {', '.join(parts)}")
+
+        # Player
+        print(THIN)
+        bar = self._hp_bar(player.hp, player.max_hp)
+        energy = self._energy_pips(player.energy)
+        print(
+            f" {player.name:<16} {bar} {player.hp:>3}/{player.max_hp:<3}"
+            f"  Blk:{player.block}  Energy: {energy}"
+        )
+        if player.statuses:
+            st = "  ".join(f"{k}({v})" for k, v in player.statuses.items())
+            print(f" Statuses: {st}")
+
+        # Battle log
+        if self.battle_log:
+            print(THIN)
+            print(" LOG")
+            for msg in self.battle_log[-6:]:
+                print(f"  {msg}")
+
+        # Hand
+        if show_hand:
+            print(THIN)
+            pile_info = f"Draw: {len(player.draw_pile)}   Discard: {len(player.discard_pile)}"
+            print(f" HAND  [{len(player.hand)} cards]   {pile_info}")
+            print(THIN)
+            for i, card_key in enumerate(player.hand, start=1):
+                card = self.cards[card_key]
+                print(f"  [{i}] {card.name:<20} ({card.cost})  {card.description}")
+
+        print(SEP)
+        if prompt_message:
+            print(f"  {prompt_message}")
+        elif show_hand:
+            print("  [0] End Turn")
 
     def choose_character(self) -> Player:
         keys = list(self.characters.keys())
@@ -262,32 +368,15 @@ class Game:
                     dmg = int(definition.get("damage", 0))
                     dealt = self.apply_damage(target, dmg)
                     if dealt > 0:
-                        print(f"  {target.name} suffers {dealt} from {status}.")
+                        self._log(f"{target.name} suffers {dealt} from {status}.")
                 if "heal" in definition:
                     healed = self.heal(target, int(definition.get("heal", 0)))
                     if healed > 0:
-                        print(f"  {target.name} heals {healed} from {status}.")
+                        self._log(f"{target.name} heals {healed} from {status}.")
                 target.statuses[status] -= 1
 
             if target.statuses.get(status, 0) <= 0:
                 target.statuses.pop(status, None)
-
-    def show_battle_state(self, player: Player, enemies: List[Enemy], enemy_turn_counter: int) -> None:
-        print("\n=== Battle State ===")
-        print(f"Player: {player.name} HP {player.hp}/{player.max_hp} | Block {player.block} | Energy {player.energy}")
-        if player.statuses:
-            print(f"Player statuses: {player.statuses}")
-        for idx, enemy in enumerate(enemies, start=1):
-            status = "DEAD" if enemy.is_dead() else "ALIVE"
-            print(f"[{idx}] {enemy.name} HP {enemy.hp}/{enemy.max_hp} | Block {enemy.block} | {status}")
-            if enemy.statuses:
-                print(f"    statuses: {enemy.statuses}")
-            if not enemy.is_dead() and enemy.action_pattern:
-                next_actions = enemy.action_pattern[enemy_turn_counter % len(enemy.action_pattern)]
-                intent = ", ".join(
-                    f"{a.type}(dmg={a.damage}, block={a.block})" for a in next_actions
-                )
-                print(f"    next intent: {intent}")
 
     def draw_cards_until_non_attack(self, player: Player) -> None:
         """Keep drawing cards one at a time until a non-Attack card is drawn."""
@@ -297,7 +386,7 @@ class Game:
             if len(player.hand) == before:
                 break
             drawn_card = self.cards[player.hand[-1]]
-            print(f"Drew {drawn_card.name}.")
+            self._log(f"Drew {drawn_card.name}.")
             if drawn_card.type.lower() != "attack":
                 break
 
@@ -306,34 +395,46 @@ class Game:
         for _ in range(count):
             if not player.hand:
                 return
-            print("\nChoose a card to discard:")
-            for i, card_key in enumerate(player.hand, start=1):
-                card = self.cards[card_key]
-                print(f"  {i}. {card.name}")
+            self.show_battle_ui(
+                player,
+                self._battle_enemies or [],
+                show_hand=True,
+                prompt_message="Choose a card to discard (enter card index):",
+            )
             while True:
-                raw = input("Discard card index: ").strip()
+                raw = input("> ").strip()
                 if raw.isdigit() and 1 <= int(raw) <= len(player.hand):
                     idx = int(raw) - 1
                     discarded = player.hand.pop(idx)
                     player.discard_pile.append(discarded)
-                    print(f"Discarded {self.cards[discarded].name}.")
+                    self._log(f"Discarded {self.cards[discarded].name}.")
                     break
-                print("Invalid choice.")
+                print("  Invalid choice. ", end="", flush=True)
 
     def choose_target(self, enemies: List[Enemy]) -> Optional[Enemy]:
         alive = [e for e in enemies if not e.is_dead()]
         if not alive:
             return None
+        self.show_battle_ui(
+            self._battle_player or alive[0],
+            enemies,
+            show_hand=False,
+            prompt_message="Choose target enemy (enter enemy index):",
+        )
         while True:
-            raw = input("Choose target enemy index: ").strip()
+            raw = input("> ").strip()
             if raw.isdigit():
                 idx = int(raw) - 1
                 if 0 <= idx < len(enemies) and not enemies[idx].is_dead():
                     return enemies[idx]
-            print("Invalid target.")
+            print("  Invalid target. ", end="", flush=True)
 
-    def play_player_turn(self, player: Player, enemies: List[Enemy]) -> bool:
+    def play_player_turn(self, player: Player, enemies: List[Enemy], enemy_turn_counter: int = 0) -> bool:
         # Returns True if battle should continue, False if battle ended.
+        self._battle_player = player
+        self._battle_enemies = enemies
+        self._current_turn_counter = enemy_turn_counter
+
         player.block = 0
         self.process_status_start(player, "player")
         if player.is_dead():
@@ -348,18 +449,13 @@ class Game:
             if all(e.is_dead() for e in enemies):
                 return False
 
-            self.show_battle_state(player, enemies, enemy_turn_counter=0)
-            print("\nHand:")
-            for i, card_key in enumerate(player.hand, start=1):
-                card = self.cards[card_key]
-                print(f"  {i}. {card.name} (cost {card.cost}) - {card.description}")
-            print("  0. End turn")
+            self.show_battle_ui(player, enemies)
+            raw = input("\n> Play card (or 0 to end turn): ").strip()
 
-            raw = input("Play card index: ").strip()
             if raw == "0":
                 break
             if not raw.isdigit() or not (1 <= int(raw) <= len(player.hand)):
-                print("Invalid card index.")
+                self._log("Invalid card index.")
                 continue
 
             hand_idx = int(raw) - 1
@@ -367,19 +463,20 @@ class Game:
             card = self.cards[card_key]
 
             if player.energy < card.cost:
-                print("Not enough energy.")
+                self._log("Not enough energy.")
                 continue
 
             # Cost payment order follows README: pay first, then resolve effects.
             player.energy -= card.cost
             if card.hp_cost > 0:
                 player.hp = max(0, player.hp - card.hp_cost)
+                self._log(f"{player.name} paid {card.hp_cost} HP.")
 
             player.hand.pop(hand_idx)
             player.discard_pile.append(card_key)
 
             if player.is_dead():
-                print("You died from card cost.")
+                self._log("You died from card cost.")
                 return False
 
             card_context = CardPlayContext(
@@ -405,6 +502,7 @@ class Game:
             enemy.block = 0
             self.process_status_start(enemy, "enemy")
 
+        self.battle_log.clear()
         for enemy in enemies:
             if enemy.is_dead():
                 continue
@@ -412,26 +510,32 @@ class Game:
                 continue
 
             turn_actions = enemy.action_pattern[enemy_turn_counter % len(enemy.action_pattern)]
-            print(f"\n{enemy.name} acts:")
+            self._log(f"── {enemy.name} acts ──")
             for action in turn_actions:
                 if enemy.is_dead():
                     break
                 atype = action.type.lower()
                 if atype == "attack":
                     dealt = self.deal_damage(enemy, player, action.damage)
-                    print(f"  attack for {dealt} damage.")
+                    self._log(f"  → attacks for {dealt} damage.")
                 elif atype == "defend":
                     enemy.block += action.block
-                    print(f"  gains {action.block} block.")
+                    self._log(f"  → gains {action.block} block.")
                 else:
-                    # Unknown actions are ignored in this PoC.
-                    print(f"  unknown action '{action.type}' skipped.")
+                    self._log(f"  → {action.type} (skipped).")
 
                 if player.is_dead():
+                    self.show_battle_ui(player, enemies, show_hand=False)
+                    print("\n  You were defeated.")
                     return False
 
         if all(e.is_dead() for e in enemies):
             return False
+
+        # Show the result of the enemy turn, then wait for the player.
+        self.show_battle_ui(player, enemies, show_hand=False)
+        input("\n  [Press Enter to start your turn] ")
+        self.battle_log.clear()
         return True
 
     def clone_enemy(self, source: Enemy, hp_scale: float = 1.0, dmg_scale: float = 1.0) -> Enemy:
@@ -474,11 +578,9 @@ class Game:
         return [self.clone_enemy(p, hp_scale=1.0 + battle_index * 0.08, dmg_scale=1.0 + battle_index * 0.05) for p in picks]
 
     def run_battle(self, player: Player, enemies: List[Enemy], battle_no: int, total: int) -> bool:
-        print(f"\n{'=' * 30}")
-        print(f"Battle {battle_no}/{total}")
-        print("Enemies:")
-        for e in enemies:
-            print(f"  - {e.name} (HP {e.hp})")
+        self.battle_no = battle_no
+        self.battle_total = total
+        self.battle_log.clear()
 
         # Prepare player deck for each battle.
         player.draw_pile = player.deck[:]
@@ -488,11 +590,12 @@ class Game:
 
         enemy_turn_counter = 0
         while True:
-            ongoing = self.play_player_turn(player, enemies)
+            ongoing = self.play_player_turn(player, enemies, enemy_turn_counter)
             if player.is_dead():
                 return False
             if all(e.is_dead() for e in enemies):
-                print("You win this battle.")
+                self._clear_screen()
+                print("\n You cleared the battle!")
                 return True
             if not ongoing:
                 return False
@@ -500,10 +603,10 @@ class Game:
             ongoing = self.play_enemy_turn(player, enemies, enemy_turn_counter)
             enemy_turn_counter += 1
             if player.is_dead():
-                print("You were defeated.")
                 return False
             if all(e.is_dead() for e in enemies):
-                print("You win this battle.")
+                self._clear_screen()
+                print("\n You cleared the battle!")
                 return True
             if not ongoing:
                 return False

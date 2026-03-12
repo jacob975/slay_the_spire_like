@@ -35,11 +35,16 @@ def _apply_to_all_enemies(ctx: CardPlayContext) -> None:
         if enemy.is_dead():
             continue
         dealt = game.deal_damage(ctx.player, enemy, card.damage)
-        if dealt > 0:
-            print(f"{card.name} deals {dealt} to {enemy.name}.")
+        game._log(f"{card.name} deals {dealt} to {enemy.name}.")
+        print(f"{card.name} deals {dealt} to {enemy.name}.")
         if card.vulnerable > 0 and not enemy.is_dead():
             game.apply_status(enemy, "vulnerable", card.vulnerable)
+            game._log(f"{enemy.name} gains vulnerable x{card.vulnerable}.")
             print(f"{enemy.name} gains vulnerable x{card.vulnerable}.")
+        if card.weak > 0 and not enemy.is_dead():
+            game.apply_status(enemy, "weak", card.weak)
+            game._log(f"{enemy.name} gains weak x{card.weak}.")
+            print(f"{enemy.name} gains weak x{card.weak}.")
 
 
 def _apply_to_single_enemy(ctx: CardPlayContext) -> bool:
@@ -50,10 +55,10 @@ def _apply_to_single_enemy(ctx: CardPlayContext) -> bool:
         return False
 
     dealt = game.deal_damage(ctx.player, target, card.damage)
-    if dealt > 0:
-        print(f"{card.name} deals {dealt} to {target.name}.")
+    game._log(f"{card.name} deals {dealt} to {target.name}.")
+    print(f"{card.name} deals {dealt} to {target.name}.")
     if card.vulnerable > 0 and not target.is_dead():
-        game.apply_status(target, "vulnerable", card.vulnerable)
+        game._log(f"{target.name} gains vulnerable x{card.vulnerable}.")
         print(f"{target.name} gains vulnerable x{card.vulnerable}.")
     if card.weak > 0 and not target.is_dead():
         game.apply_status(target, "weak", card.weak)
@@ -67,17 +72,29 @@ def _apply_to_self(ctx: CardPlayContext) -> None:
     player = ctx.player
 
     if card.damage > 0:
-        game.deal_damage(player, player, card.damage)
+        dealt = game.deal_damage(player, player, card.damage)
+        game._log(f"{card.name} deals {dealt} to {player.name}.")
+        print(f"{card.name} deals {dealt} to {player.name}.")
+
     if card.block > 0:
         player.block += card.block
+        game._log(f"{player.name} gains {card.block} block.")
         print(f"{player.name} gains {card.block} block.")
+
     if card.heal > 0:
         healed = game.heal(player, card.heal)
+        game._log(f"{player.name} heals {healed} HP.")
         print(f"{player.name} heals {healed} HP.")
+
     if card.vulnerable > 0:
         game.apply_status(player, "vulnerable", card.vulnerable)
+        game._log(f"{player.name} gains vulnerable x{card.vulnerable}.")
+        print(f"{player.name} gains vulnerable x{card.vulnerable}.")
+
     if card.weak > 0:
         game.apply_status(player, "weak", card.weak)
+        game._log(f"{player.name} gains weak x{card.weak}.")
+        print(f"{player.name} gains weak x{card.weak}.")
 
 
 def _apply_generic_non_self_effects(ctx: CardPlayContext) -> None:
@@ -87,9 +104,12 @@ def _apply_generic_non_self_effects(ctx: CardPlayContext) -> None:
 
     if card.block > 0 and card.target != "self":
         player.block += card.block
+        game._log(f"{player.name} gains {card.block} block.")
         print(f"{player.name} gains {card.block} block.")
+
     if card.heal > 0 and card.target != "self":
         healed = game.heal(player, card.heal)
+        game._log(f"{player.name} heals {healed} HP.")
         print(f"{player.name} heals {healed} HP.")
 
 
@@ -97,6 +117,7 @@ def _effect_draw(ctx: CardPlayContext, amount: int) -> None:
     if amount <= 0:
         return
     ctx.game.draw_cards(ctx.player, amount)
+    ctx.game._log(f"{ctx.player.name} draws {amount} card(s).")
     print(f"{ctx.player.name} draws {amount} card(s).")
 
 
@@ -104,16 +125,19 @@ def _effect_discard(ctx: CardPlayContext, amount: int) -> None:
     if amount <= 0:
         return
     ctx.game.choose_discard(ctx.player, amount)
+    ctx.game._log(f"{ctx.player.name} discards {amount} card(s).")
 
 
 def _effect_draw_until_non_attack(ctx: CardPlayContext, enabled: bool) -> None:
     if enabled:
         ctx.game.draw_cards_until_non_attack(ctx.player)
+        ctx.game._log(f"{ctx.player.name} draws until a non-attack card.")
 
 
 def _effect_copy_to_discard(ctx: CardPlayContext, enabled: bool) -> None:
     if enabled:
         ctx.player.discard_pile.append(ctx.card_key)
+        ctx.game._log(f"{ctx.card.name} copied to discard pile.")
         print(f"{ctx.card.name} copied to discard pile.")
 
 
