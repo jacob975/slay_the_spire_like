@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 
 import yaml
 
+from card_effects import CardPlayContext, resolve_card_effects
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -25,6 +27,10 @@ class Card:
     weak: int = 0
     target: str = "single_enemy"
     hp_cost: int = 0
+    draw: int = 0
+    discard: int = 0
+    draw_until_non_attack: bool = False
+    copy_to_discard: bool = False
 
 
 @dataclass
@@ -32,6 +38,7 @@ class Action:
     type: str
     damage: int = 0
     block: int = 0
+    heal: int = 0
     target: str = "player"
 
 
@@ -100,6 +107,10 @@ class Game:
                 weak=int(value.get("weak", 0)),
                 target=target,
                 hp_cost=int(value.get("hp_cost", 0)),
+                draw=int(value.get("draw", 0)),
+                discard=int(value.get("discard", 0)),
+                draw_until_non_attack=bool(value.get("draw_until_non_attack", False)),
+                copy_to_discard=bool(value.get("copy_to_discard", False)),
             )
         return cards
 
@@ -127,6 +138,7 @@ class Game:
                         type=str(item.get("type", "attack")).lower(),
                         damage=int(item.get("damage", 0)),
                         block=int(item.get("block", 0)),
+                        heal=int(item.get("heal", 0)),
                         target=str(item.get("target", "player")),
                     )
                 )
@@ -277,6 +289,37 @@ class Game:
                 )
                 print(f"    next intent: {intent}")
 
+    def draw_cards_until_non_attack(self, player: Player) -> None:
+        """Keep drawing cards one at a time until a non-Attack card is drawn."""
+        while True:
+            before = len(player.hand)
+            self.draw_cards(player, 1)
+            if len(player.hand) == before:
+                break
+            drawn_card = self.cards[player.hand[-1]]
+            print(f"Drew {drawn_card.name}.")
+            if drawn_card.type.lower() != "attack":
+                break
+
+    def choose_discard(self, player: Player, count: int) -> None:
+        """Ask the player to choose `count` cards from hand to discard."""
+        for _ in range(count):
+            if not player.hand:
+                return
+            print("\nChoose a card to discard:")
+            for i, card_key in enumerate(player.hand, start=1):
+                card = self.cards[card_key]
+                print(f"  {i}. {card.name}")
+            while True:
+                raw = input("Discard card index: ").strip()
+                if raw.isdigit() and 1 <= int(raw) <= len(player.hand):
+                    idx = int(raw) - 1
+                    discarded = player.hand.pop(idx)
+                    player.discard_pile.append(discarded)
+                    print(f"Discarded {self.cards[discarded].name}.")
+                    break
+                print("Invalid choice.")
+
     def choose_target(self, enemies: List[Enemy]) -> Optional[Enemy]:
         alive = [e for e in enemies if not e.is_dead()]
         if not alive:
@@ -339,51 +382,15 @@ class Game:
                 print("You died from card cost.")
                 return False
 
-            if card.target == "all_enemies":
-                for enemy in enemies:
-                    if enemy.is_dead():
-                        continue
-                    dealt = self.deal_damage(player, enemy, card.damage)
-                    if dealt > 0:
-                        print(f"{card.name} deals {dealt} to {enemy.name}.")
-                    if card.vulnerable > 0 and not enemy.is_dead():
-                        self.apply_status(enemy, "vulnerable", card.vulnerable)
-                        print(f"{enemy.name} gains vulnerable x{card.vulnerable}.")
-            elif card.target == "single_enemy":
-                target = self.choose_target(enemies)
-                if target is None:
-                    return False
-                dealt = self.deal_damage(player, target, card.damage)
-                if dealt > 0:
-                    print(f"{card.name} deals {dealt} to {target.name}.")
-                if card.vulnerable > 0 and not target.is_dead():
-                    self.apply_status(target, "vulnerable", card.vulnerable)
-                    print(f"{target.name} gains vulnerable x{card.vulnerable}.")
-                if card.weak > 0 and not target.is_dead():
-                    self.apply_status(target, "weak", card.weak)
-                    print(f"{target.name} gains weak x{card.weak}.")
-            else:
-                # Self-target skill/ability card.
-                if card.damage > 0:
-                    self.deal_damage(player, player, card.damage)
-                if card.block > 0:
-                    player.block += card.block
-                    print(f"{player.name} gains {card.block} block.")
-                if card.heal > 0:
-                    healed = self.heal(player, card.heal)
-                    print(f"{player.name} heals {healed} HP.")
-                if card.vulnerable > 0:
-                    self.apply_status(player, "vulnerable", card.vulnerable)
-                if card.weak > 0:
-                    self.apply_status(player, "weak", card.weak)
-
-            # Generic effects also apply if present.
-            if card.block > 0 and card.target != "self":
-                player.block += card.block
-                print(f"{player.name} gains {card.block} block.")
-            if card.heal > 0 and card.target != "self":
-                healed = self.heal(player, card.heal)
-                print(f"{player.name} heals {healed} HP.")
+            card_context = CardPlayContext(
+                game=self,
+                player=player,
+                enemies=enemies,
+                card=card,
+                card_key=card_key,
+            )
+            if not resolve_card_effects(card_context):
+                return False
 
         # End of player turn: discard remaining hand.
         player.discard_pile.extend(player.hand)
@@ -501,6 +508,31 @@ class Game:
             if not ongoing:
                 return False
 
+    def offer_card_reward(self, player: Player) -> None:
+        """Let the player choose one of three random cards to add to their deck."""
+        all_keys = list(self.cards.keys())
+        if not all_keys:
+            return
+        picks = random.sample(all_keys, k=min(3, len(all_keys)))
+        print("\n--- Card Reward ---")
+        print("Choose a card to add to your deck:")
+        for i, key in enumerate(picks, start=1):
+            card = self.cards[key]
+            print(f"  {i}. {card.name} (cost {card.cost}) - {card.description}")
+        print("  0. Skip")
+
+        while True:
+            raw = input("Enter number: ").strip()
+            if raw == "0":
+                print("Skipped card reward.")
+                return
+            if raw.isdigit() and 1 <= int(raw) <= len(picks):
+                chosen_key = picks[int(raw) - 1]
+                player.deck.append(chosen_key)
+                print(f"Added {self.cards[chosen_key].name} to your deck.")
+                return
+            print("Invalid choice.")
+
     def run_campaign(self) -> None:
         print("Card Game Proof of Concept")
         print("=" * 30)
@@ -518,6 +550,7 @@ class Game:
             # Small post-battle recovery to keep PoC playable.
             recovered = self.heal(player, max(1, int(player.max_hp * 0.1)))
             print(f"After battle recovery: +{recovered} HP (now {player.hp}/{player.max_hp})")
+            self.offer_card_reward(player)
 
         boss = self.build_battle(normal_battles + 1, is_boss=True)
         won = self.run_battle(player, boss, battle_no=normal_battles + 1, total=normal_battles + 1)

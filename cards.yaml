@@ -1,64 +1,85 @@
+# Warrior Cards
 Strike:
-  name: "Strike"
-  description: "Deal 6 damage."
+  name: "打擊"
+  description: "造成6點傷害。"
   type: "Attack"
   cost: 1
   damage: 6
 Defend:
-  name: "Defend"
-  description: "Gain 5 block."
+  name: "防禦"
+  description: "獲得5點格擋。"
   type: "Skill"
   cost: 1
   block: 5
 Bash:
-  name: "Bash"
-  description: "Deal 8 damage and apply 2 Vulnerable."
+  name: "重擊"
+  description: "造成8點傷害並使目標受到2回合的脆弱效果。"
   type: "Attack"
   cost: 2
   damage: 8
   vulnerable: 2
-
+Speed Strike:
+  name: "迅速打擊"
+  description: "造成9點傷害並抽一張卡片。"
+  type: "Attack"
+  cost: 1
+  damage: 9
+  draw: 1
+Fury:
+  name: "狂怒"
+  description: "抽一張牌，重複直到你抽到一張非攻擊牌。"
+  type: "Skill"
+  cost: 0
+  draw_until_non_attack: true
+Anger:
+  name: "憤怒"
+  description: "造成6點傷害，複製這張牌並將其加入你的棄牌堆。"
+  type: "Attack"
+  cost: 0
+  damage: 6
+  copy_to_discard: true
+# Rogue Cards
 Pierce:
-  name: "Pierce"
-  description: "Deal 7 damage."
+  name: "穿刺"
+  description: "造成7點傷害。"
   type: "Attack"
   cost: 1
   damage: 7
 
 Quick Shot:
-  name: "Quick Shot"
-  description: "Deal 4 damage and gain 1 block."
+  name: "快速射擊"
+  description: "造成4點傷害並獲得1點格擋。"
   type: "Attack"
   cost: 1
   damage: 4
   block: 1
 
 Brace:
-  name: "Brace"
-  description: "Gain 7 block."
+  name: "防禦準備"
+  description: "獲得7點格擋。"
   type: "Skill"
   cost: 1
   block: 7
 
 Expose:
-  name: "Expose"
-  description: "Apply 2 Vulnerable."
+  name: "暴露"
+  description: "使目標受到2回合的脆弱效果。"
   type: "Skill"
   cost: 1
   vulnerable: 2
 
 Field Medicine:
-  name: "Field Medicine"
-  description: "Gain 4 block and heal 3 health."
+  name: "野戰醫療"
+  description: "獲得4點格擋並恢復3點生命值。"
   type: "Skill"
   cost: 1
   block: 4
   heal: 3
 
 Volley:
-  name: "Volley"
-  description: "Deal 4 damage to all enemies."
+  name: "齊射"
+  description: "對所有敵人造成4點傷害。"
   type: "Attack"
-  cost: 2
+  cost: 1
   damage: 4
   target: "all_enemies"
