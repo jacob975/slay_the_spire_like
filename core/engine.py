@@ -49,6 +49,9 @@ class GameEngine:
         self.battle_log:          List[str]            = []
         self._pending_card_key:   Optional[str]        = None
         self._pending_card_idx:   int                  = -1
+        self._pending_card_obj:   Optional[Card]       = None
+        self._pending_energy_cost: int                 = 0
+        self._pending_hp_cost:    int                  = 0
         self._pending_discard_n:  int                  = 0
 
         # Per-enemy flash timers for UI  {enemy_name: ticks_remaining}
@@ -253,8 +256,9 @@ class GameEngine:
             # Store pending card and ask scene to provide target
             self._pending_card_key = card_key
             self._pending_card_idx = hand_idx  # already removed, just for reference
+            self._pending_energy_cost = card.cost
+            self._pending_hp_cost = card.hp_cost
             self.state = BattleState.CHOOSING_TARGET
-            # temporarily store card ref so choose_target can use it
             self._pending_card_obj = card
             return "need_target"
         else:
@@ -279,14 +283,44 @@ class GameEngine:
 
         return "ok"
 
+    def cancel_pending_card(self) -> str:
+        """Cancel a pending single-target card and restore the pre-selection state."""
+        assert self.player is not None
+        if self.state != BattleState.CHOOSING_TARGET:
+            return "invalid"
+        if not self._pending_card_key or self._pending_card_obj is None:
+            return "invalid"
+
+        player = self.player
+        insert_at = max(0, min(self._pending_card_idx, len(player.hand)))
+        player.hand.insert(insert_at, self._pending_card_key)
+
+        if player.discard_pile and player.discard_pile[-1] == self._pending_card_key:
+            player.discard_pile.pop()
+        else:
+            for i in range(len(player.discard_pile) - 1, -1, -1):
+                if player.discard_pile[i] == self._pending_card_key:
+                    player.discard_pile.pop(i)
+                    break
+
+        player.energy += self._pending_energy_cost
+        if self._pending_hp_cost > 0:
+            player.hp = min(player.max_hp, player.hp + self._pending_hp_cost)
+
+        self._clear_pending_card()
+        self.state = BattleState.PLAYER_ACTION
+        return "ok"
+
     def choose_target(self, enemy_idx: int) -> str:
         """Complete a pending single-enemy card play. Returns 'ok' or 'battle_over'."""
         assert self.player is not None
         alive = [e for e in self.enemies if not e.is_dead()]
         if enemy_idx < 0 or enemy_idx >= len(alive):
             return "invalid"
+        if self._pending_card_obj is None:
+            return "invalid"
         target = alive[enemy_idx]
-        card = self._pending_card_obj  # type: ignore[attr-defined]
+        card = self._pending_card_obj
         player = self.player
 
         dealt = self._deal_damage(player, target, card.damage)
@@ -318,7 +352,7 @@ class GameEngine:
             player.discard_pile.append(self._pending_card_key or "")
             self._log(f"{card.name} copied to discard pile.")
 
-        self._pending_card_key = None
+        self._clear_pending_card()
         if self._check_battle_end():
             return "battle_over"
         self.state = BattleState.PLAYER_ACTION
@@ -336,18 +370,25 @@ class GameEngine:
         self._pending_discard_n -= 1
         if self._pending_discard_n <= 0:
             # Finish any remaining post-card effects
-            card = getattr(self, "_pending_card_obj", None)
+            card = self._pending_card_obj
             if card:
                 if card.draw_until_non_attack:
                     self._draw_until_non_attack(player)
                 if card.copy_to_discard:
                     player.discard_pile.append(self._pending_card_key or "")
-            self._pending_card_key = None
+            self._clear_pending_card()
             if self._check_battle_end():
                 return "battle_over"
             self.state = BattleState.PLAYER_ACTION
             return "ok"
         return "more"
+
+    def _clear_pending_card(self) -> None:
+        self._pending_card_key = None
+        self._pending_card_idx = -1
+        self._pending_card_obj = None
+        self._pending_energy_cost = 0
+        self._pending_hp_cost = 0
 
     def end_player_turn(self) -> None:
         """Discard hand and advance to enemy turn."""

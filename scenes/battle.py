@@ -94,7 +94,7 @@ class BattleScene(BaseScene):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE and engine.state == BattleState.CHOOSING_TARGET:
                 self._selected_card_idx = None
-                engine.state = BattleState.PLAYER_ACTION
+                engine.cancel_pending_card()
                 self._rebuild_hand()
             if event.key == pygame.K_e and engine.state == BattleState.PLAYER_ACTION:
                 self._on_end_turn()
@@ -119,8 +119,7 @@ class BattleScene(BaseScene):
 
         elif state == BattleState.CHOOSING_TARGET:
             # Click on an enemy
-            alive = [e for e in engine.enemies if not e.is_dead()]
-            for i, (enemy, rect) in enumerate(self._enemy_rects(alive)):
+            for i, (enemy, rect) in enumerate(self._enemy_rects()):
                 if rect.collidepoint(pos):
                     result = engine.choose_target(i)
                     self._selected_card_idx = None
@@ -229,33 +228,30 @@ class BattleScene(BaseScene):
         surface.blit(surf, (10, 8))
 
     def _draw_enemies(self, surface: pygame.Surface, W: int) -> None:
+        for enemy, rect in self._enemy_slots():
+            self._draw_enemy_card(surface, enemy, rect.x, rect.y, rect.width)
+
+    def _enemy_slots(self) -> List[tuple[Enemy, pygame.Rect]]:
         engine = self.manager.engine
         alive = [e for e in engine.enemies if not e.is_dead()]
-        dead  = [e for e in engine.enemies if e.is_dead()]
-        all_e = alive + dead
+        dead = [e for e in engine.enemies if e.is_dead()]
+        all_enemies = alive + dead
 
-        n = len(all_e)
-        slot_w = min(200, (W - 40) // max(n, 1))
-        total_w = n * slot_w
-        start_x = (W - total_w) // 2
-
-        for i, enemy in enumerate(all_e):
-            x = start_x + i * slot_w
-            y = 50
-            self._draw_enemy_card(surface, enemy, x, y, slot_w - 10)
-
-    def _enemy_rects(self, alive_enemies: List[Enemy]) -> List[tuple]:
         W = self.W
-        n = len(alive_enemies)
+        n = len(all_enemies)
         slot_w = min(200, (W - 40) // max(n, 1))
         total_w = n * slot_w
         start_x = (W - total_w) // 2
-        result = []
-        for i, enemy in enumerate(alive_enemies):
+
+        result: List[tuple[Enemy, pygame.Rect]] = []
+        for i, enemy in enumerate(all_enemies):
             x = start_x + i * slot_w
             rect = pygame.Rect(x, 50, slot_w - 10, 190)
             result.append((enemy, rect))
         return result
+
+    def _enemy_rects(self) -> List[tuple[Enemy, pygame.Rect]]:
+        return [(enemy, rect) for enemy, rect in self._enemy_slots() if not enemy.is_dead()]
 
     def _draw_enemy_card(
         self, surface: pygame.Surface, enemy: Enemy, x: int, y: int, w: int
